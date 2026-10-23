@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>T STORE - Dual-Device Cashier POS System</title>
+  
+  <!-- FontAwesome & HTML5-QRCode & PeerJS Libraries -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --panel-dark: #1e293b;
+      --card-dark: #334155;
+      --accent-blue: #2563eb;
+      --accent-blue-hover: #1d4ed8;
+      --accent-green: #10b981;
+      --accent-red: #dc2626;
+      --accent-red-hover: #b91c1c;
+      --accent-gold: #f59e0b;
+      --accent-purple: #8b5cf6;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #475569;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      overflow: hidden;
+      position: fixed;
+    }
+
+    /* Layout Structure */
+    .app-container {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Left Workspace: Items Cart */
+    .cart-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: var(--panel-dark);
+      border-right: 2px solid var(--border-color);
+      height: 100%;
+    }
+
+    .header-bar {
+      padding: 15px 20px;
+      background-color: #020617;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .header-bar h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #60a5fa;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .connection-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #0f172a;
+      padding: 6px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+      font-size: 0.85rem;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #ef4444;
+    }
+
+    .status-dot.connected {
+      background-color: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    /* Cart Table */
+    .cart-table-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    table.cart-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    table.cart-table th {
+      padding: 12px;
+      background-color: var(--card-dark);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      text-transform: uppercase;
+    }
+
+    table.cart-table td {
+      padding: 14px 12px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 1rem;
+    }
+
+    .qty-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .qty-btn {
+      background: var(--card-dark);
+      border: 1px solid var(--border-color);
+      color: white;
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    /* Barcode Quick Direct Input */
+    .cart-input-bar {
+      padding: 12px 15px;
+      background-color: #0f172a;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .cart-input-bar input {
+      flex: 1;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: var(--panel-dark);
+      color: white;
+      font-size: 1rem;
+    }
+
+    .scan-cooldown-badge {
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: #334155;
+      color: #94a3b8;
+      display: none;
+    }
+
+    .scan-cooldown-badge.active {
+      display: inline-block;
+      background: #f59e0b;
+      color: #000;
+      font-weight: bold;
+    }
+
+    /* Cart Summary Footer */
+    .cart-summary {
+      padding: 18px 20px;
+      background-color: #020617;
+      border-top: 2px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .summary-text {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .summary-text .total-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .summary-text .total-amount {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: var(--accent-green);
+    }
+
+    .loyalty-applied-badge {
+      background: rgba(139, 92, 246, 0.2);
+      border: 1px solid var(--accent-purple);
+      color: #c084fc;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Right Sidebar: Terminal Options */
+    .sidebar-options {
+      width: 320px;
+      background-color: #020617;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: -4px 0 15px rgba(0,0,0,0.5);
+      overflow-y: auto;
+    }
+
+    .sidebar-title {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 12px;
+      transition: all 0.2s ease;
+      color: white;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-blue { background-color: var(--accent-blue); }
+    .btn-blue:hover { background-color: var(--accent-blue-hover); }
+
+    .btn-purple { background-color: var(--accent-purple); }
+    .btn-purple:hover { background-color: #7c3aed; }
+
+    .btn-gold { background-color: var(--accent-gold); color: black; }
+
+    .btn-red { 
+      background-color: var(--accent-red); 
+      box-shadow: 0 0 10px rgba(220, 38, 38, 0.4);
+    }
+    .btn-red:hover { background-color: var(--accent-red-hover); }
+
+    .btn-green { background-color: var(--accent-green); }
+
+    .btn-gray { background-color: var(--card-dark); border: 1px solid var(--border-color); }
+
+    /* Modals & Overlay Screens */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(5px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-box {
+      background-color: var(--panel-dark);
+      border: 1px solid var(--border-color);
+      width: 90%;
+      max-width: 480px;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      position: relative;
+      overscroll-behavior: contain;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .modal-header h2 {
+      font-size: 1.25rem;
+    }
+
+    .back-btn {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background-color: var(--bg-dark);
+      color: white;
+      font-size: 1rem;
+    }
+
+    /* Keypad Grid for Phone & POS */
+    .keypad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .key-btn {
+      padding: 18px;
+      background-color: var(--card-dark);
+      border: 1px solid var(--border-color);
+      color: white;
+      font-size: 1.3rem;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .key-btn:active {
+      background-color: var(--accent-blue);
+    }
+
+    /* Phone Specific Fullscreen View */
+    .phone-wrapper {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      background-color: #020617;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 2000;
+    }
+
+    .phone-wrapper.active-phone {
+      display: flex;
+    }
+
+    .phone-header {
+      padding: 15px;
+      background-color: var(--panel-dark);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .phone-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+
+    /* NFC Visual Wave Animation */
+    .nfc-wave-container {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.1);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 25px;
+      position: relative;
+    }
+
+    .nfc-wave-container i {
+      font-size: 4rem;
+      color: var(--accent-blue);
+    }
+
+    .pulse-ring {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid var(--accent-blue);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 1; }
+      100% { transform: scale(1.4); opacity: 0; }
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid var(--card-dark);
+      border-top-color: var(--accent-blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Printable Thermal Receipt */
+    #receipt-print-area {
+      display: none;
+      background: white;
+      color: black;
+      padding: 20px;
+      font-family: 'Courier New', Courier, monospace;
+      width: 280px;
+      margin: auto;
+    }
+
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #receipt-print-area, #receipt-print-area * {
+        visibility: visible;
+      }
+      #receipt-print-area {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== LAPTOP POS TERMINAL VIEW ==================== -->
+  <div class="app-container" id="laptop-view">
+    
+    <!-- Left Workspace: Items Cart -->
+    <div class="cart-section">
+      <div class="header-bar">
+        <h1><i class="fa-solid fa-store"></i> T STORE</h1>
+        <div class="connection-badge">
+          <div class="status-dot" id="sync-dot"></div>
+          <span id="sync-text">Connecting...</span>
+        </div>
+      </div>
+
+      <!-- Cart Items Table -->
+      <div class="cart-table-container">
+        <table class="cart-table">
+          <thead>
+            <tr>
+              <th>Item Name</th>
+              <th>Price</th>
+              <th>Qty</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="cart-tbody">
+            <!-- Dynamic Cart Rows Here -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Quick Direct Barcode Input -->
+      <div class="cart-input-bar">
+        <span class="scan-cooldown-badge" id="cooldown-indicator"><i class="fa-solid fa-hourglass-half"></i> Wait 2s</span>
+        <input type="text" id="direct-barcode-input" placeholder="Scan or Enter Barcode to Add Item..." onkeydown="if(event.key==='Enter') addBarcodeDirect()">
+        <button class="btn btn-blue" style="width:auto; padding:0 20px;" onclick="addBarcodeDirect()"><i class="fa-solid fa-plus"></i> Add</button>
+      </div>
+
+      <!-- Cart Total Summary Bar -->
+      <div class="cart-summary">
+        <div class="summary-text">
+          <span class="total-label">GRAND TOTAL</span>
+          <span class="total-amount" id="cart-total-text">0.00 EGP</span>
+        </div>
+        <div id="loyalty-applied-container" style="display:none;">
+          <div class="loyalty-applied-badge">
+            <i class="fa-solid fa-star"></i> <span id="loyalty-applied-text">20 EGP Loyalty Discount Applied!</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Sidebar: Terminal Options -->
+    <div class="sidebar-options">
+      <div class="sidebar-title">Terminal Controls</div>
+
+      <button class="btn btn-purple" onclick="openModal('new-loyalty-modal')">
+        <i class="fa-solid fa-user-plus"></i> New Loyalty Program
+      </button>
+
+      <button class="btn btn-purple" onclick="openModal('lookup-loyalty-modal')">
+        <i class="fa-solid fa-address-card"></i> Loyalty Program
+      </button>
+
+      <button class="btn btn-blue" onclick="openModal('add-product-modal')">
+        <i class="fa-solid fa-cart-plus"></i> Add New Product
+      </button>
+
+      <button class="btn btn-blue" onclick="openModal('price-check-modal')">
+        <i class="fa-solid fa-tag"></i> Price Check
+      </button>
+
+      <button class="btn btn-red" onclick="voidCart()">
+        <i class="fa-solid fa-trash-can"></i> Void Cart
+      </button>
+
+      <button class="btn btn-green" onclick="openCheckoutModal()">
+        <i class="fa-solid fa-cash-register"></i> Checkout
+      </button>
+
+      <button class="btn btn-gold" onclick="openModal('qr-modal')">
+        <i class="fa-solid fa-qrcode"></i> Connect Phone
+      </button>
+    </div>
+  </div>
+
+
+  <!-- ==================== PHONE HANDHELD TERMINAL VIEW ==================== -->
+  <div class="phone-wrapper" id="phone-view">
+    <div class="phone-header">
+      <button class="back-btn" onclick="phoneGoBack()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <span style="font-weight:bold; color:#60a5fa;">T STORE MOBILE</span>
+      <div style="width:50px;"></div>
+    </div>
+
+    <!-- Phone Main Dashboard Screen -->
+    <div class="phone-body" id="phone-screen-main">
+      <div class="connection-badge" style="margin-bottom:20px;">
+        <div class="status-dot connected"></div>
+        <span>Paired with POS Laptop</span>
+      </div>
+
+      <button class="btn btn-blue" style="margin-bottom:15px; padding:20px;" onclick="phoneStartCameraScanner()">
+        <i class="fa-solid fa-camera"></i> Live Barcode Scanner
+      </button>
+
+      <div style="background:var(--card-dark); padding:20px; border-radius:12px; border:1px solid var(--border-color); width:100%; text-align:center;">
+        <i class="fa-solid fa-nfc-symbol" style="font-size:3rem; color:var(--text-muted); margin-bottom:10px;"></i>
+        <p style="color:var(--text-muted); font-size:0.9rem;">NFC Payment Terminal automatically activates when Visa Checkout is initiated on Laptop.</p>
+      </div>
+    </div>
+
+    <!-- Phone Camera Scanner Screen -->
+    <div class="phone-body" id="phone-screen-scanner" style="display:none; padding:10px;">
+      <div id="scanner-cooldown-notice" style="display:none; background:#f59e0b; color:#000; padding:6px; border-radius:6px; font-weight:bold; margin-bottom:8px;">
+        Cooldown: Please wait 2 seconds...
+      </div>
+      <div id="reader" style="width:100%; border-radius:12px; overflow:hidden;"></div>
+      <p style="margin-top:15px; color:var(--text-muted);">Point phone camera at barcode</p>
+    </div>
+
+    <!-- Phone NFC Tap Target Screen -->
+    <div class="phone-body" id="phone-screen-nfc" style="display:none;">
+      <div class="nfc-wave-container">
+        <div class="pulse-ring"></div>
+        <i class="fa-solid fa-nfc-symbol"></i>
+      </div>
+      <h2>Tap NFC Card / Phone</h2>
+      <p style="color:var(--text-muted); margin-top:8px;" id="nfc-amount-display">Amount Due: 0.00 EGP</p>
+
+      <button class="btn btn-gray" style="margin-top:30px; width:auto; padding:10px 20px;" onclick="simulateCardTap()">
+        [ Simulate Card Tap ]
+      </button>
+    </div>
+
+    <!-- Phone Reading Card Loading Screen -->
+    <div class="phone-body" id="phone-screen-reading" style="display:none;">
+      <div class="spinner"></div>
+      <h3>Reading NFC Card...</h3>
+      <p style="color:var(--text-muted); margin-top:6px;">Hold card steady</p>
+    </div>
+
+    <!-- Phone PIN Pad Screen -->
+    <div class="phone-body" id="phone-screen-pin" style="display:none; width:100%; max-width:320px; margin:auto;">
+      <h3>Enter Customer PIN</h3>
+      <div style="font-size:2rem; letter-spacing:10px; margin:15px 0; background:var(--panel-dark); width:100%; padding:10px; border-radius:8px; border:1px solid var(--border-color);" id="pin-display">
+        ****
+      </div>
+      <div class="keypad-grid" style="width:100%;">
+        <div class="key-btn" onclick="phonePinKey('1')">1</div>
+        <div class="key-btn" onclick="phonePinKey('2')">2</div>
+        <div class="key-btn" onclick="phonePinKey('3')">3</div>
+        <div class="key-btn" onclick="phonePinKey('4')">4</div>
+        <div class="key-btn" onclick="phonePinKey('5')">5</div>
+        <div class="key-btn" onclick="phonePinKey('6')">6</div>
+        <div class="key-btn" onclick="phonePinKey('7')">7</div>
+        <div class="key-btn" onclick="phonePinKey('8')">8</div>
+        <div class="key-btn" onclick="phonePinKey('9')">9</div>
+        <div class="key-btn" onclick="phonePinKey('C')">C</div>
+        <div class="key-btn" onclick="phonePinKey('0')">0</div>
+        <div class="key-btn" onclick="phonePinKey('BACK')"><i class="fa-solid fa-backspace"></i></div>
+      </div>
+      <button class="btn btn-green" style="margin-top:15px;" onclick="phoneSubmitPin()">Confirm PIN</button>
+    </div>
+
+    <!-- Phone Bank Processing Screen -->
+    <div class="phone-body" id="phone-screen-processing" style="display:none;">
+      <div class="spinner"></div>
+      <h3 id="bank-status-text">Connecting to Bank...</h3>
+      <p style="color:var(--text-muted); margin-top:6px;">Please do not remove card</p>
+    </div>
+
+    <!-- Phone Success Screen -->
+    <div class="phone-body" id="phone-screen-success" style="display:none;">
+      <i class="fa-solid fa-circle-check" style="font-size:5rem; color:var(--accent-green); margin-bottom:15px;"></i>
+      <h2 style="color:var(--accent-green);">Transaction Complete!</h2>
+      <p style="color:var(--text-muted); margin-top:8px;">Receipt printed on laptop terminal</p>
+    </div>
+  </div>
+
+
+  <!-- ==================== MODAL DIALOGS ==================== -->
+
+  <!-- New Loyalty Program Modal -->
+  <div class="modal-overlay" id="new-loyalty-modal">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-user-plus" style="color:var(--accent-purple)"></i> New Loyalty Member</h2>
+        <button class="back-btn" onclick="closeModal('new-loyalty-modal')"><i class="fa-solid fa-xmark"></i> Close</button>
+      </div>
+      <div class="input-group">
+        <label>Customer Name</label>
+        <input type="text" id="loyalty-new-name" placeholder="e.g. Ahmed Hassan">
+      </div>
+      <div class="input-group">
+        <label>Phone Number</label>
+        <input type="tel" id="loyalty-new-phone" placeholder="01xxxxxxxx">
+      </div>
+      <button class="btn btn-purple" onclick="registerNewLoyaltyMember()">Register Member</button>
+    </div>
+  </div>
+
+  <!-- Loyalty Lookup Modal -->
+  <div class="modal-overlay" id="lookup-loyalty-modal">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2><i class="fa-solid fa-address-card" style="color:var(--accent-purple)"></i> Loyalty Member Lookup</h2>
+        <button class="back-btn" onclick="closeModal('lookup-loyalty-modal')"><i class="fa-solid fa-xmark"></i> Close</button>
+      </div>
+      <div class="input-group">
+        <label>Search by Phone Number or Name</label>
+        <input type="text" id="loyalty-search-query" placeholder="Enter phone or name..." oninput="searchLoyaltyMember()">
+      </div>
+      <div id="loyalty-search-results" style="max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+        <!-- Dynamic Loyalty Member Cards -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Product Modal -->
+  <div class="modal-overlay" id="add-product-modal">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Add New Product</h2>
+        <button class="back-btn" onclick="closeModal('add-product-modal')"><i class="fa-solid fa-xmark"></i> Close</button>
+      </div>
+      <div class="input-group">
+        <label>Barcode Number</label>
+        <input type="text" id="new-barcode" placeholder="Scan or enter barcode">
+      </div>
+      <div class="input-group">
+        <label>Product Name</label>
+        <input type="text" id="new-name" placeholder="e.g. Molto Chocolate">
+      </div>
+      <div class="input-group">
+        <label>Price (EGP)</label>
+        <input type="number" id="new-price" step="0.5" placeholder="0.00">
+      </div>
+      <button class="btn btn-green" onclick="saveNewProduct()">Save Item</button>
+    </div>
+  </div>
+
+  <!-- Price Check Modal -->
+  <div class="modal-overlay" id="price-check-modal">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Price Check</h2>
+        <button class="back-btn" onclick="closeModal('price-check-modal')"><i class="fa-solid fa-xmark"></i> Close</button>
+      </div>
+      <div class="input-group">
+        <label>Scan or Enter Barcode</label>
+        <input type="text" id="check-barcode" placeholder="Enter barcode..." oninput="checkPriceInput()">
+      </div>
+      <div id="price-check-result" style="padding:15px; background:var(--bg-dark); border-radius:8px; text-align:center; display:none;">
+        <h3 id="check-item-name" style="color:#60a5fa;">Item Name</h3>
+        <p id="check-item-price" style="font-size:1.8rem; font-weight:bold; color:var(--accent-green); margin-top:5px;">0.00 EGP</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checkout Main Options Modal -->
+  <div class="modal-overlay" id="checkout-modal">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Select Payment Method</h2>
+        <button class="back-btn" onclick="closeModal('checkout-modal')"><i class="fa-solid fa-xmark"></i> Back</button>
+      </div>
+      <div style="font-size:1.5rem; text-align:center; margin-bottom:20px; font-weight:bold; color:var(--accent-green);" id="checkout-modal-total">
+        Total: 0.00 EGP
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <button class="btn btn-green" onclick="selectCheckoutMethod('cash')">
+          <i class="fa-solid fa-money-bill-wave"></i> Cash Payment
+        </button>
+        <button class="btn btn-blue" onclick="selectCheckoutMethod('visa')">
+          <i class="fa-solid fa-nfc-symbol"></i> Visa / NFC Handheld
+        </button>
+        <button class="btn btn-gray" onclick="selectCheckoutMethod('manual')">
+          <i class="fa-solid fa-keyboard"></i> Enter Transaction No.
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cash Payment Modal -->
+  <div class="modal-overlay" id="cash-modal">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Cash Payment</h2>
+        <button class="back-btn" onclick="closeModal('cash-modal'); openCheckoutModal();"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      </div>
+      <div class="input-group">
+        <label>Amount Received (EGP)</label>
+        <input type="number" id="cash-received" placeholder="0.00" oninput="calculateChange()">
+      </div>
+      <div style="padding:15px; background:var(--bg-dark); border-radius:8px; margin-bottom:15px;">
+        <p style="color:var(--text-muted); font-size:0.9rem;">Change Due:</p>
+        <p id="cash-change-text" style="font-size:1.8rem; font-weight:bold; color:var(--accent-gold);">0.00 EGP</p>
+      </div>
+      <button class="btn btn-green" onclick="completeCashTransaction()">Confirm Payment & Print</button>
+    </div>
+  </div>
+
+  <!-- Manual Transaction Modal -->
+  <div class="modal-overlay" id="manual-modal">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Manual Transaction Entry</h2>
+        <button class="back-btn" onclick="closeModal('manual-modal'); openCheckoutModal();"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      </div>
+      <div class="input-group">
+        <label>Transaction ID / Reference Number</label>
+        <input type="text" id="manual-tx-id" placeholder="e.g. TXN-984210">
+      </div>
+      <button class="btn btn-green" onclick="completeManualTransaction()">Confirm Transaction</button>
+    </div>
+  </div>
+
+  <!-- QR Pairing Modal -->
+  <div class="modal-overlay" id="qr-modal">
+    <div class="modal-box" style="text-align:center;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Pair Handheld Phone</h2>
+        <button class="back-btn" onclick="closeModal('qr-modal')"><i class="fa-solid fa-xmark"></i> Close</button>
+      </div>
+      <div id="qrcode" style="display:flex; justify-content:center; margin:20px 0;"></div>
+      <p style="color:var(--text-muted); font-size:0.85rem;">Scan this QR code with your phone camera to pair it directly to this terminal.</p>
+    </div>
+  </div>
+
+  <!-- Receipt Thermal Printable Format -->
+  <div id="receipt-print-area">
+    <h2 style="text-align:center;">T STORE</h2>
+    <p style="text-align:center; font-size:12px;">Cairo, Egypt</p>
+    <p style="text-align:center; font-size:12px;" id="receipt-date"></p>
+    <hr style="border-dash:1px dashed #000; margin:10px 0;">
+    <div id="receipt-items-list"></div>
+    <hr style="border-dash:1px dashed #000; margin:10px 0;">
+    <p style="font-size:12px; display:none;" id="receipt-loyalty-discount">Loyalty Discount: -20.00 EGP</p>
+    <p style="font-weight:bold; font-size:16px;" id="receipt-total-line">TOTAL: 0.00 EGP</p>
+    <p style="font-size:12px;" id="receipt-payment-type">Payment: Cash</p>
+    <hr style="border-dash:1px dashed #000; margin:10px 0;">
+    <p style="text-align:center; font-size:12px;">Thank you for shopping at T STORE!</p>
+  </div>
+
+
+  <!-- ==================== JAVASCRIPT POS ENGINE ==================== -->
+  <script>
+    /* ================= SYSTEM STATE & DATA ================= */
+    const catalog = {
+      "622300010111": { name: "Chipsy Salt 50g", price: 10.00 },
+      "622300020222": { name: "Molto Chocolate", price: 15.50 },
+      "622100030333": { name: "El Arosa Tea 250g", price: 45.00 },
+      "622400040444": { name: "Pepsi Can 330ml", price: 12.00 },
+      "622500050555": { name: "Domty Cheese 500g", price: 38.00 },
+      "622600060666": { name: "Indomie Noodle Pack", price: 8.00 }
+    };
+
+    let cart = [];
+    let pinInput = "";
+    let html5QrCode = null;
+
+    // Scan Throttle State (2 sec gap)
+    let lastScanTimestamp = 0;
+    const SCAN_COOLDOWN_MS = 2000;
+
+    // Active Loyalty Member State
+    let activeLoyaltyMember = null; // { name, phone, purchases }
+
+    // Load Loyalty Database from localStorage
+    function getLoyaltyMembers() {
+      return JSON.parse(localStorage.getItem('t_store_loyalty_members') || '[]');
+    }
+
+    function saveLoyaltyMembers(members) {
+      localStorage.setItem('t_store_loyalty_members', JSON.stringify(members));
+    }
+
+    /* ================= MULTI-CHANNEL CONNECTIVITY ENGINE ================= */
+    // Fallback order: PeerJS WebRTC -> BroadcastChannel -> LocalStorage Polling
+    const channel = new BroadcastChannel("t_store_pos_channel");
+    let peer = null;
+    let peerConn = null;
+    const SESSION_ID = "TSTORE_POS_MAIN_SESSION";
+
+    function sendSyncMessage(type, payload = {}) {
+      const msg = { type, payload, timestamp: Date.now() };
+
+      // 1. BroadcastChannel
+      try { channel.postMessage(msg); } catch(e){}
+
+      // 2. PeerJS
+      if (peerConn && peerConn.open) {
+        try { peerConn.send(msg); } catch(e){}
+      }
+
+      // 3. LocalStorage Fallback Sync
+      try {
+        localStorage.setItem('t_store_last_msg', JSON.stringify(msg));
+      } catch(e){}
+    }
+
+    function handleIncomingSyncMessage(msg) {
+      if (!msg || !msg.type) return;
+      const { type, payload } = msg;
+
+      if (type === 'PHONE_CONNECTED') {
+        updateConnectionStatus(true);
+      }
+      else if (type === 'TRIGGER_NFC') {
+        showPhoneScreen('phone-screen-nfc');
+        document.getElementById('nfc-amount-display').innerText = `Amount Due: ${payload.amount.toFixed(2)} EGP`;
+      }
+      else if (type === 'ADD_BARCODE') {
+        addItemByBarcode(payload.barcode);
+      }
+      else if (type === 'TRANSACTION_SUCCESS') {
+        playSuccessTeetSound();
+        
+        // Handle Loyalty Purchase Counter
+        if (activeLoyaltyMember) {
+          incrementMemberPurchases(activeLoyaltyMember.phone);
+        }
+
+        renderReceipt('Visa / NFC Handheld');
+        cart = [];
+        activeLoyaltyMember = null;
+        renderCart();
+        closeModal('checkout-modal');
+        alert("Transaction Completed Successfully on Phone!");
+      }
+    }
+
+    // LocalStorage Polling Listener
+    window.addEventListener('storage', (e) => {
+      if (e.key === 't_store_last_msg' && e.newValue) {
+        try { handleIncomingSyncMessage(JSON.parse(e.newValue)); } catch(err){}
+      }
+    });
+
+    channel.onmessage = (e) => handleIncomingSyncMessage(e.data);
+
+    /* ================= SOUND ENGINE ================= */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playScannerBeep() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(2800, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.18);
+    }
+
+    function playSuccessTeetSound() {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc1 = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc1.type = 'sine';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(1200, audioCtx.currentTime);
+      osc2.frequency.setValueAtTime(1600, audioCtx.currentTime + 0.1);
+      
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc1.start(audioCtx.currentTime);
+      osc1.stop(audioCtx.currentTime + 0.1);
+      osc2.start(audioCtx.currentTime + 0.1);
+      osc2.stop(audioCtx.currentTime + 0.35);
+    }
+
+    /* ================= INITIALIZATION & PEER NETWORK ================= */
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isPhoneRole = urlParams.get('role') === 'phone';
+
+      if (isPhoneRole) {
+        document.getElementById('laptop-view').style.display = 'none';
+        document.getElementById('phone-view').classList.add('active-phone');
+        showPhoneScreen('phone-screen-main');
+        initPhonePeer();
+        setupNFCReader();
+      } else {
+        initLaptopPeer();
+        generatePairingQR();
+      }
+
+      renderCart();
+    });
+
+    function updateConnectionStatus(isConnected) {
+      const dot = document.getElementById('sync-dot');
+      const text = document.getElementById('sync-text');
+      if (isConnected) {
+        dot.classList.add('connected');
+        text.innerText = 'Handheld Connected';
+      } else {
+        dot.classList.remove('connected');
+        text.innerText = 'Handheld Disconnected';
+      }
+    }
+
+    function initLaptopPeer() {
+      peer = new Peer(SESSION_ID);
+      peer.on('open', () => updateConnectionStatus(false));
+      peer.on('connection', (conn) => {
+        peerConn = conn;
+        updateConnectionStatus(true);
+        peerConn.on('data', (data) => handleIncomingSyncMessage(data));
+      });
+      peer.on('error', () => updateConnectionStatus(true)); // Fallback to BroadcastChannel
+    }
+
+    function initPhonePeer() {
+      peer = new Peer();
+      peer.on('open', () => {
+        peerConn = peer.connect(SESSION_ID);
+        peerConn.on('open', () => {
+          sendSyncMessage('PHONE_CONNECTED');
+        });
+        peerConn.on('data', (data) => handleIncomingSyncMessage(data));
+      });
+      sendSyncMessage('PHONE_CONNECTED');
+    }
+
+    /* ================= LAPTOP CART LOGIC WITH SCAN THROTTLING ================= */
+    function checkScanCooldown() {
+      const now = Date.now();
+      if (now - lastScanTimestamp < SCAN_COOLDOWN_MS) {
+        // Show cooldown UI
+        const badge = document.getElementById('cooldown-indicator');
+        if (badge) {
+          badge.classList.add('active');
+          setTimeout(() => badge.classList.remove('active'), 1200);
+        }
+        return false;
+      }
+      lastScanTimestamp = now;
+      return true;
+    }
+
+    function addItemByBarcode(barcode) {
+      if (!checkScanCooldown()) return;
+
+      playScannerBeep();
+      const item = catalog[barcode] || { name: `Item ${barcode}`, price: 20.00 };
+      
+      const existing = cart.find(i => i.barcode === barcode);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        cart.push({ barcode, name: item.name, price: item.price, qty: 1 });
+      }
+      renderCart();
+    }
+
+    function addBarcodeDirect() {
+      const input = document.getElementById('direct-barcode-input');
+      const barcode = input.value.trim();
+      if (barcode) {
+        addItemByBarcode(barcode);
+        input.value = '';
+      }
+    }
+
+    function updateQty(index, delta) {
+      cart[index].qty += delta;
+      if (cart[index].qty <= 0) cart.splice(index, 1);
+      renderCart();
+    }
+
+    function voidCart() {
+      if (cart.length === 0) return;
+      if (confirm("Are you sure you want to void the entire cart?")) {
+        cart = [];
+        activeLoyaltyMember = null;
+        renderCart();
+      }
+    }
+
+    function calculateCartSubtotal() {
+      return cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    }
+
+    function isLoyaltyDiscountEligible() {
+      if (!activeLoyaltyMember) return false;
+      // Rule: Every 5th purchase gets 20 EGP discount (i.e. 4 previous purchases -> 5th purchase)
+      return ((activeLoyaltyMember.purchases + 1) % 5 === 0);
+    }
+
+    function calculateTotal() {
+      const subtotal = calculateCartSubtotal();
+      if (isLoyaltyDiscountEligible()) {
+        return Math.max(0, subtotal - 20);
+      }
+      return subtotal;
+    }
+
+    function renderCart() {
+      const tbody = document.getElementById('cart-tbody');
+      tbody.innerHTML = '';
+
+      cart.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.name}</td>
+          <td>${item.price.toFixed(2)} EGP</td>
+          <td>
+            <div class="qty-controls">
+              <button class="qty-btn" onclick="updateQty(${index}, -1)">-</button>
+              <span>${item.qty}</span>
+              <button class="qty-btn" onclick="updateQty(${index}, 1)">+</button>
+            </div>
+          </td>
+          <td>${(item.price * item.qty).toFixed(2)} EGP</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      const total = calculateTotal();
+      document.getElementById('cart-total-text').innerText = `${total.toFixed(2)} EGP`;
+
+      const loyaltyContainer = document.getElementById('loyalty-applied-container');
+      const loyaltyText = document.getElementById('loyalty-applied-text');
+
+      if (activeLoyaltyMember) {
+        loyaltyContainer.style.display = 'block';
+        if (isLoyaltyDiscountEligible()) {
+          loyaltyText.innerText = `${activeLoyaltyMember.name} (5th Order: -20 EGP Applied!)`;
+        } else {
+          const remaining = 5 - ((activeLoyaltyMember.purchases + 1) % 5);
+          loyaltyText.innerText = `${activeLoyaltyMember.name} (${remaining} purchase(s) until discount)`;
+        }
+      } else {
+        loyaltyContainer.style.display = 'none';
+      }
+    }
+
+    /* ================= LOYALTY PROGRAM LOGIC ================= */
+    function registerNewLoyaltyMember() {
+      const name = document.getElementById('loyalty-new-name').value.trim();
+      const phone = document.getElementById('loyalty-new-phone').value.trim();
+
+      if (!name || !phone) {
+        alert("Please enter both Customer Name and Phone Number!");
+        return;
+      }
+
+      let members = getLoyaltyMembers();
+      if (members.some(m => m.phone === phone)) {
+        alert("A member with this phone number already exists!");
+        return;
+      }
+
+      const newMember = { name, phone, purchases: 0, joinedDate: new Date().toLocaleDateString() };
+      members.push(newMember);
+      saveLoyaltyMembers(members);
+
+      activeLoyaltyMember = newMember;
+      renderCart();
+      closeModal('new-loyalty-modal');
+      alert(`Loyalty Member Registered Successfully!\nApplied to current order.`);
+
+      document.getElementById('loyalty-new-name').value = '';
+      document.getElementById('loyalty-new-phone').value = '';
+    }
+
+    function searchLoyaltyMember() {
+      const query = document.getElementById('loyalty-search-query').value.trim().toLowerCase();
+      const resultsContainer = document.getElementById('loyalty-search-results');
+      resultsContainer.innerHTML = '';
+
+      if (!query) return;
+
+      const members = getLoyaltyMembers();
+      const filtered = members.filter(m => m.name.toLowerCase().includes(query) || m.phone.includes(query));
+
+      if (filtered.length === 0) {
+        resultsContainer.innerHTML = '<p style="color:var(--text-muted); text-align:center;">No members found.</p>';
+        return;
+      }
+
+      filtered.forEach(m => {
+        const div = document.createElement('div');
+        div.style.background = 'var(--card-dark)';
+        div.style.padding = '12px';
+        div.style.borderRadius = '8px';
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+
+        const nextIsFifth = (m.purchases + 1) % 5 === 0;
+
+        div.innerHTML = `
+          <div>
+            <div style="font-weight:bold;">${m.name}</div>
+            <div style="font-size:0.8rem; color:var(--text-muted);">${m.phone} • Purchases: ${m.purchases}</div>
+            ${nextIsFifth ? '<span style="color:var(--accent-gold); font-size:0.75rem; font-weight:bold;">★ Eligible for 20 EGP Discount!</span>' : ''}
+          </div>
+          <button class="btn btn-purple" style="width:auto; padding:6px 12px; font-size:0.8rem;" onclick="selectLoyaltyMember('${m.phone}')">Apply</button>
+        `;
+        resultsContainer.appendChild(div);
+      });
+    }
+
+    function selectLoyaltyMember(phone) {
+      const members = getLoyaltyMembers();
+      const found = members.find(m => m.phone === phone);
+      if (found) {
+        activeLoyaltyMember = found;
+        renderCart();
+        closeModal('lookup-loyalty-modal');
+        alert(`Applied loyalty member: ${found.name}`);
+      }
+    }
+
+    function incrementMemberPurchases(phone) {
+      let members = getLoyaltyMembers();
+      const index = members.findIndex(m => m.phone === phone);
+      if (index !== -1) {
+        members[index].purchases += 1;
+        saveLoyaltyMembers(members);
+      }
+    }
+
+    /* ================= LAPTOP CHECKOUT & MODALS ================= */
+    function openModal(id) {
+      document.getElementById(id).classList.add('active');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.remove('active');
+    }
+
+    function openCheckoutModal() {
+      if (cart.length === 0) {
+        alert("Cart is empty!");
+        return;
+      }
+      document.getElementById('checkout-modal-total').innerText = `Total: ${calculateTotal().toFixed(2)} EGP`;
+      openModal('checkout-modal');
+    }
+
+    function selectCheckoutMethod(method) {
+      closeModal('checkout-modal');
+      const total = calculateTotal();
+
+      if (method === 'cash') {
+        document.getElementById('cash-received').value = '';
+        document.getElementById('cash-change-text').innerText = '0.00 EGP';
+        openModal('cash-modal');
+      } else if (method === 'visa') {
+        sendSyncMessage('TRIGGER_NFC', { amount: total });
+        alert("NFC Payment Request sent to Phone Handheld!");
+      } else if (method === 'manual') {
+        openModal('manual-modal');
+      }
+    }
+
+    function calculateChange() {
+      const received = parseFloat(document.getElementById('cash-received').value) || 0;
+      const total = calculateTotal();
+      const change = received - total;
+      document.getElementById('cash-change-text').innerText = `${Math.max(0, change).toFixed(2)} EGP`;
+    }
+
+    function completeCashTransaction() {
+      playSuccessTeetSound();
+      if (activeLoyaltyMember) incrementMemberPurchases(activeLoyaltyMember.phone);
+      renderReceipt('Cash');
+      cart = [];
+      activeLoyaltyMember = null;
+      renderCart();
+      closeModal('cash-modal');
+      alert("Cash Payment Complete!");
+    }
+
+    function completeManualTransaction() {
+      playSuccessTeetSound();
+      if (activeLoyaltyMember) incrementMemberPurchases(activeLoyaltyMember.phone);
+      renderReceipt('Manual Entry');
+      cart = [];
+      activeLoyaltyMember = null;
+      renderCart();
+      closeModal('manual-modal');
+      alert("Manual Transaction Complete!");
+    }
+
+    /* ================= PHONE HANDHELD LOGIC ================= */
+    function showPhoneScreen(screenId) {
+      const screens = ['phone-screen-main', 'phone-screen-scanner', 'phone-screen-nfc', 'phone-screen-reading', 'phone-screen-pin', 'phone-screen-processing', 'phone-screen-success'];
+      screens.forEach(s => document.getElementById(s).style.display = 'none');
+      document.getElementById(screenId).style.display = 'flex';
+    }
+
+    function phoneGoBack() {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => showPhoneScreen('phone-screen-main')).catch(() => showPhoneScreen('phone-screen-main'));
+      } else {
+        showPhoneScreen('phone-screen-main');
+      }
+    }
+
+    function phoneStartCameraScanner() {
+      showPhoneScreen('phone-screen-scanner');
+      html5QrCode = new Html5Qrcode("reader");
+      html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        (decodedText) => {
+          const now = Date.now();
+          if (now - lastScanTimestamp < SCAN_COOLDOWN_MS) {
+            const notice = document.getElementById('scanner-cooldown-notice');
+            if (notice) {
+              notice.style.display = 'block';
+              setTimeout(() => notice.style.display = 'none', 1000);
+            }
+            return;
+          }
+          lastScanTimestamp = now;
+
+          sendSyncMessage('ADD_BARCODE', { barcode: decodedText });
+          playScannerBeep();
+          phoneGoBack();
+        },
+        (errorMessage) => {}
+      );
+    }
+
+    /* NFC Web API & Simulation Flow */
+    async function setupNFCReader() {
+      sendSyncMessage('PHONE_CONNECTED');
+
+      if ('NDEFReader' in window) {
+        try {
+          const ndef = new NDEFReader();
+          await ndef.scan();
+          ndef.addEventListener("reading", () => {
+            simulateCardTap();
+          });
+        } catch (error) {
+          console.log("NFC setup skipped/unsupported:", error);
+        }
+      }
+    }
+
+    function simulateCardTap() {
+      showPhoneScreen('phone-screen-reading');
+      setTimeout(() => {
+        pinInput = "";
+        document.getElementById('pin-display').innerText = "****";
+        showPhoneScreen('phone-screen-pin');
+      }, 3000);
+    }
+
+    function phonePinKey(val) {
+      if (val === 'C') {
+        pinInput = "";
+      } else if (val === 'BACK') {
+        pinInput = pinInput.slice(0, -1);
+      } else if (pinInput.length < 4) {
+        pinInput += val;
+      }
+      document.getElementById('pin-display').innerText = "*".repeat(pinInput.length) || "****";
+    }
+
+    function phoneSubmitPin() {
+      if (pinInput.length < 4) {
+        alert("Please enter a 4-digit PIN");
+        return;
+      }
+
+      showPhoneScreen('phone-screen-processing');
+      const bankText = document.getElementById('bank-status-text');
+      bankText.innerText = "Connecting to Bank...";
+
+      setTimeout(() => {
+        bankText.innerText = "Authenticating Payment...";
+      }, 2500);
+
+      setTimeout(() => {
+        showPhoneScreen('phone-screen-success');
+        sendSyncMessage('TRANSACTION_SUCCESS');
+        setTimeout(() => {
+          showPhoneScreen('phone-screen-main');
+        }, 3000);
+      }, 5000);
+    }
+
+    /* ================= PRODUCT CATALOG & RECEIPT ================= */
+    function saveNewProduct() {
+      const barcode = document.getElementById('new-barcode').value.trim();
+      const name = document.getElementById('new-name').value.trim();
+      const price = parseFloat(document.getElementById('new-price').value);
+
+      if (barcode && name && !isNaN(price)) {
+        catalog[barcode] = { name, price };
+        alert("Product Saved to Catalog!");
+        closeModal('add-product-modal');
+      }
+    }
+
+    function checkPriceInput() {
+      const barcode = document.getElementById('check-barcode').value.trim();
+      const resultDiv = document.getElementById('price-check-result');
+      
+      if (catalog[barcode]) {
+        playScannerBeep();
+        document.getElementById('check-item-name').innerText = catalog[barcode].name;
+        document.getElementById('check-item-price').innerText = `${catalog[barcode].price.toFixed(2)} EGP`;
+        resultDiv.style.display = 'block';
+      } else {
+        resultDiv.style.display = 'none';
+      }
+    }
+
+    function generatePairingQR() {
+      const url = `${window.location.origin}${window.location.pathname}?role=phone`;
+      new QRCode(document.getElementById("qrcode"), {
+        text: url,
+        width: 180,
+        height: 180
+      });
+    }
+
+    function renderReceipt(paymentType) {
+      document.getElementById('receipt-date').innerText = new Date().toLocaleString();
+      const itemsContainer = document.getElementById('receipt-items-list');
+      itemsContainer.innerHTML = '';
+
+      cart.forEach(item => {
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.fontSize = '12px';
+        div.innerHTML = `<span>${item.qty}x ${item.name}</span><span>${(item.price * item.qty).toFixed(2)} EGP</span>`;
+        itemsContainer.appendChild(div);
+      });
+
+      const loyaltyDisc = document.getElementById('receipt-loyalty-discount');
+      if (isLoyaltyDiscountEligible()) {
+        loyaltyDisc.style.display = 'block';
+      } else {
+        loyaltyDisc.style.display = 'none';
+      }
+
+      document.getElementById('receipt-total-line').innerText = `TOTAL: ${calculateTotal().toFixed(2)} EGP`;
+      document.getElementById('receipt-payment-type').innerText = `Payment: ${paymentType}`;
+
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+  </script>
+</body>
+</html>
